@@ -16,8 +16,13 @@ export const checkWin = (gridCells) => {
     // 1. Calculate points from checked cells (weighted by priority)
     gridCells.forEach(cell => {
         if (cell.isChecked) {
-            // Default to 0 if priority is missing for old grids
-            score += parseInt(cell.priority || 0, 10);
+            // Priority 1 (Most important) = 9 points
+            // Priority 9 (Least important) = 1 point
+            // Formula: 10 - Priority
+            const priority = parseInt(cell.priority || 0, 10);
+            if (priority > 0) {
+                score += (10 - priority);
+            }
         }
     });
 

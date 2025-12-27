@@ -13,7 +13,7 @@ const Rules = () => {
                     <h4 className="font-bold mb-2 text-indigo-200">🛠️ Construction de la grille</h4>
                     <ul className="list-disc list-inside space-y-1">
                         <li>Définis tes 9 objectifs personnels.</li>
-                        <li>Classe-les sous forme de <strong>tier-list</strong> <span className="italic opacity-75">(1 = Priorité absolue / 9 = Le moins prioritaire)</span>.</li>
+                        <li>Classe-les sous forme de <strong>tier-list</strong> <span className="italic opacity-75">(1 = Rapporte 9 pts / 9 = Rapporte 1 pt)</span>.</li>
                     </ul>
                 </div>
 
