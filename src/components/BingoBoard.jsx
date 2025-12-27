@@ -1,25 +1,21 @@
-import { checkWin } from '../utils/winLogic';
+import { checkWin, calculateTotalScore } from '../utils/winLogic';
 
-const BingoBoard = ({ grid, currentUserId, onToggle, onDelete, onVote }) => {
-    const { id, name, cells, creatorId } = grid;
-    const score = checkWin(cells);
+const BingoBoard = ({ grid, currentUserId, onToggle, onDelete, onVote, onAddBonus, onToggleBonus }) => {
+    const { id, name, cells, creatorId, bonus } = grid;
+    const score = calculateTotalScore(grid); // Updated scoring
     const isCreator = creatorId === currentUserId;
 
-    const calculateOdds = (votes, type) => {
-        const v = votes || { success: 1, fail: 1, unsure: 1 };
-        const total = (v.success || 1) + (v.fail || 1) + (v.unsure || 1);
-        // Cote = Total / Votes pour ce choix
-        const val = total / (v[type] || 1);
-        return val.toFixed(2);
-    };
+    if (!Array.isArray(cells)) return null; // Safeguard if grid is incomplete
+
 
     return (
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden border-4 border-black transform transition hover:scale-105 duration-200 relative group">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden border-4 border-black transform transition hover:scale-105 duration-200 relative group flex flex-col h-full">
             {/* Action Buttons: Delete & Share */}
             <div className="absolute top-0 right-0 flex z-10">
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
+                        // Share logic
                         const text = `🔥 Regarde ma grille Bingo 2026 "${name}" !`;
                         const url = window.location.href;
                         window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
@@ -32,7 +28,7 @@ const BingoBoard = ({ grid, currentUserId, onToggle, onDelete, onVote }) => {
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
-                        // Discord usually implies copying the link
+                        // Discord logic
                         const text = `**Bingo 2026** : Regarde la grille de ${name} !\n${window.location.href}`;
                         navigator.clipboard.writeText(text);
                         alert("Lien copié pour Discord !");
@@ -54,30 +50,30 @@ const BingoBoard = ({ grid, currentUserId, onToggle, onDelete, onVote }) => {
             </div>
 
             <div className="bg-black text-white p-2 text-center font-mono font-bold uppercase flex justify-between px-4 mt-4">
-                <span>{name}</span>
+                <span className="truncate max-w-[10rem]">{name}</span>
                 <span className="text-yellow-400">SCORE: {score}</span>
             </div>
-            <div className="grid grid-cols-3 gap-1 bg-gray-200 p-1">
+
+            <div className="grid grid-cols-3 gap-1 bg-gray-200 p-1 flex-1">
                 {cells.map((cell, idx) => {
+                    if (!cell) return <div key={idx} className="bg-gray-100 flex items-center justify-center text-xs text-gray-400">Error</div>;
                     const status = cell.status || (cell.isChecked ? 'success' : 'pending');
                     const isSuccess = status === 'success';
                     const isFailed = status === 'failed';
                     const userVote = cell.userVotes?.[currentUserId];
 
-                    // Determine cell background color
                     let cellBg = 'bg-white text-gray-800';
                     if (isSuccess) cellBg = 'bg-green-500 text-white';
                     if (isFailed) cellBg = 'bg-red-500 text-white';
 
                     return (
-                        <div key={idx} className="flex flex-col h-full bg-white gap-1 relative">
-                            {/* Main Interaction Button */}
+                        <div key={idx} className="flex flex-col h-full bg-white gap-1 relative min-h-[7rem]">
                             <button
                                 onClick={() => onToggle(id, idx, cell.isChecked)}
                                 className={`
-                                    flex-1 w-full flex flex-col items-center justify-center p-1 text-xs font-bold text-center break-words select-none transition-all relative min-h-[5rem]
-                                    ${cellBg} hover:opacity-90
-                                `}
+                                     flex-1 w-full flex flex-col items-center justify-center p-1 text-xs font-bold text-center break-words select-none transition-all relative
+                                     ${cellBg} hover:opacity-90
+                                 `}
                             >
                                 {cell.priority && (
                                     <span className={`absolute top-1 right-1 text-[9px] px-1 rounded-full ${isSuccess || isFailed ? 'bg-white text-black' : 'bg-yellow-400 text-black'}`}>
@@ -88,33 +84,24 @@ const BingoBoard = ({ grid, currentUserId, onToggle, onDelete, onVote }) => {
                                 {isFailed && <span className="absolute bottom-1 font-black text-xs uppercase text-red-100">RATÉ</span>}
                             </button>
 
-                            {/* Voting/Odds Section */}
-                            <div className="grid grid-cols-3 text-[9px] border-t border-gray-100">
+                            <div className="grid grid-cols-3 text-[9px] border-t border-gray-100 h-8">
                                 {['success', 'fail', 'unsure'].map(type => {
-                                    // Calculate count from userVotes map
                                     const voteCount = Object.values(cell.userVotes || {}).filter(v => v === type).length;
                                     const icons = { success: '✅', fail: '❌', unsure: '🤔' };
-                                    const titles = { success: 'Il va réussir', fail: 'Il va échouer', unsure: 'Ne sais pas' };
                                     const colors = {
                                         success: userVote === 'success' ? 'bg-green-200 text-green-800 border-green-500' : 'bg-green-50 text-green-700 hover:bg-green-100',
                                         fail: userVote === 'fail' ? 'bg-red-200 text-red-800 border-red-500' : 'bg-red-50 text-red-700 hover:bg-red-100',
                                         unsure: userVote === 'unsure' ? 'bg-gray-200 text-gray-800 border-gray-500' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                                     };
-
                                     return (
                                         <button
                                             key={type}
                                             onClick={() => status === 'pending' && onVote(id, idx, type)}
                                             disabled={status !== 'pending'}
-                                            className={`
-                                                p-1 flex flex-col items-center border-r border-gray-100 transition-colors
-                                                ${colors[type]} ${userVote === type ? 'font-bold border-b-2' : ''}
-                                                ${status !== 'pending' ? 'opacity-50 cursor-not-allowed' : ''}
-                                            `}
-                                            title={titles[type]}
+                                            className={`flex items-center justify-center border-r border-gray-100 w-full ${colors[type]} ${userVote === type ? 'font-bold border-b-2' : ''} ${status !== 'pending' ? 'opacity-50' : ''}`}
                                         >
-                                            <span>{icons[type]}</span>
-                                            <span className="font-mono font-bold">{voteCount}</span>
+                                            <span className="mr-0.5">{icons[type]}</span>
+                                            {voteCount > 0 && <span className="font-mono">{voteCount}</span>}
                                         </button>
                                     );
                                 })}
@@ -123,8 +110,42 @@ const BingoBoard = ({ grid, currentUserId, onToggle, onDelete, onVote }) => {
                     );
                 })}
             </div>
+
+            {/* BONUS SECTION */}
+            {bonus ? (
+                <div className="p-2 bg-yellow-400 border-t-4 border-black">
+                    <button
+                        onClick={() => onToggleBonus(id)}
+                        className={`
+                            w-full p-2 text-xs font-bold text-center border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase transition-all
+                            ${bonus.status === 'success' ? 'bg-green-500 text-white' :
+                                bonus.status === 'failed' ? 'bg-red-500 text-white' :
+                                    'bg-white text-black hover:bg-yellow-50'}
+                        `}
+                    >
+                        <div className="flex justify-between items-center mb-1 border-b border-black/10 pb-1">
+                            <span className="text-[10px]">Objectifs Bonus</span>
+                            <span className="bg-black text-yellow-400 px-1 rounded text-[10px]">+10 PTS</span>
+                        </div>
+                        <div className="text-sm">{bonus.text}</div>
+                    </button>
+                </div>
+            ) : (
+                !isCreator && (
+                    <button
+                        onClick={() => {
+                            const text = prompt("Quel défi bonus (dur !) veux-tu ajouter ?");
+                            if (text) onAddBonus(id, text);
+                        }}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black py-2 uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                    >
+                        <span>✨ Ajouter un défi bonus</span>
+                    </button>
+                )
+            )}
+
             {score > 0 && (
-                <div className="bg-yellow-400 text-black text-center font-bold text-xs py-1 animate-pulse">
+                <div className="bg-yellow-400 text-black text-center font-bold text-xs py-1 animate-pulse border-t border-black">
                     BINGO ! ({score} PTS)
                 </div>
             )}

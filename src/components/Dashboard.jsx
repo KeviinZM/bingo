@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import BingoBoard from './BingoBoard';
-import { checkWin } from '../utils/winLogic';
+import { checkWin, calculateTotalScore } from '../utils/winLogic';
 
 import { getUserId } from '../utils/identity';
 
@@ -101,12 +101,54 @@ const Dashboard = () => {
         }
     };
 
+    const handleAddBonus = async (gridId, text) => {
+        if (!text.trim()) return;
+        const gridRef = doc(db, 'bingo_grids', gridId);
+        try {
+            await updateDoc(gridRef, {
+                bonus: {
+                    text: text.trim(),
+                    status: 'pending',
+                    addedBy: userId,
+                    addedByName: users[userId] || 'Ami Mystère'
+                }
+            });
+        } catch (err) {
+            console.error("Error adding bonus:", err);
+            alert("Erreur lors de l'ajout du bonus !");
+        }
+    };
+
+    const handleToggleBonus = async (gridId) => {
+        const grid = grids.find(g => g.id === gridId);
+        if (!grid || !grid.bonus) return;
+
+        let nextStatus = 'pending';
+        const current = grid.bonus.status;
+
+        if (current === 'pending') nextStatus = 'success';
+        else if (current === 'success') nextStatus = 'failed';
+        else if (current === 'failed') nextStatus = 'pending';
+
+        const gridRef = doc(db, 'bingo_grids', gridId);
+        try {
+            await updateDoc(gridRef, {
+                "bonus.status": nextStatus
+            });
+        } catch (err) {
+            console.error("Error toggling bonus:", err);
+        }
+    };
+
     // Calculate Bettor Scores
     const calculateBettorScores = (allGrids) => {
         const scores = {}; // userId -> score
 
         allGrids.forEach(grid => {
+            if (!grid.cells || !Array.isArray(grid.cells)) return; // Safeguard
+
             grid.cells.forEach(cell => {
+                if (!cell) return; // Safeguard
                 const status = cell.status || (cell.isChecked ? 'success' : 'pending');
                 const votes = cell.userVotes || {};
 
@@ -137,10 +179,17 @@ const Dashboard = () => {
 
 
     // Calculate scores and sort for leaderboard
-    const rankedGrids = [...grids].map(g => ({
-        ...g,
-        score: checkWin(g.cells)
-    })).sort((a, b) => b.score - a.score || a.createdAt?.seconds - b.createdAt?.seconds);
+    const rankedGrids = [...grids].map(g => {
+        try {
+            return {
+                ...g,
+                score: calculateTotalScore(g)
+            };
+        } catch (e) {
+            console.error("Score Error for grid", g.id, e);
+            return { ...g, score: 0 };
+        }
+    }).sort((a, b) => b.score - a.score || a.createdAt?.seconds - b.createdAt?.seconds);
 
     if (loading) return <div className="text-center text-white mt-10">Chargement des grilles...</div>;
 
@@ -223,6 +272,8 @@ const Dashboard = () => {
                         onToggle={handleToggle}
                         onDelete={handleDelete}
                         onVote={handleVote}
+                        onAddBonus={handleAddBonus}
+                        onToggleBonus={handleToggleBonus}
                     />
                 ))}
             </div>
