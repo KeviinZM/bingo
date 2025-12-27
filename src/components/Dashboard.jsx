@@ -8,6 +8,7 @@ import { getUserId } from '../utils/identity';
 
 const Dashboard = () => {
     const [grids, setGrids] = useState([]);
+    const [users, setUsers] = useState({});
     const [loading, setLoading] = useState(true);
 
     // Get unique User ID
@@ -26,16 +27,39 @@ const Dashboard = () => {
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        // Listen for users updates
+        const unsubscribeUsers = onSnapshot(collection(db, 'bingo_users'), (snapshot) => {
+            const usersData = {};
+            snapshot.docs.forEach(doc => {
+                usersData[doc.id] = doc.data().name;
+            });
+            setUsers(usersData);
+        });
+
+        return () => {
+            unsubscribe();
+            unsubscribeUsers();
+        };
     }, []);
 
     const handleToggle = async (gridId, cellIndex, currentStatus) => {
-        // Optimistic update omitted for simplicity, relying on real-time listener
         const gridToUpdate = grids.find(g => g.id === gridId);
         if (!gridToUpdate) return;
 
         const newCells = [...gridToUpdate.cells];
-        newCells[cellIndex].isChecked = !currentStatus;
+        const cell = newCells[cellIndex];
+
+        // Cycle: pending -> success -> failed -> pending
+        let nextStatus = 'pending';
+        const current = cell.status || (cell.isChecked ? 'success' : 'pending');
+
+        if (current === 'pending') nextStatus = 'success';
+        else if (current === 'success') nextStatus = 'failed';
+        else if (current === 'failed') nextStatus = 'pending';
+
+        // Update both for compatibility
+        cell.status = nextStatus;
+        cell.isChecked = (nextStatus === 'success');
 
         const gridRef = doc(db, 'bingo_grids', gridId);
         try {
@@ -64,18 +88,10 @@ const Dashboard = () => {
         const cell = newCells[cellIndex];
 
         // Initialize structures
-        if (!cell.votes) cell.votes = { success: 1, fail: 1, unsure: 1 };
-        if (!cell.voters) cell.voters = [];
+        if (!cell.userVotes) cell.userVotes = {};
 
-        // Check if already voted for this cell
-        if (cell.voters.includes(userId)) {
-            alert("Tu as déjà voté pour cette case, petit tricheur !");
-            return;
-        }
-
-        // Increment vote and record voter
-        cell.votes[voteType] = (cell.votes[voteType] || 0) + 1;
-        cell.voters.push(userId);
+        // Update specific user vote
+        cell.userVotes[userId] = voteType;
 
         const gridRef = doc(db, 'bingo_grids', gridId);
         try {
@@ -84,6 +100,39 @@ const Dashboard = () => {
             console.error("Error updating vote:", err);
         }
     };
+
+    // Calculate Bettor Scores
+    const calculateBettorScores = (allGrids) => {
+        const scores = {}; // userId -> score
+
+        allGrids.forEach(grid => {
+            grid.cells.forEach(cell => {
+                const status = cell.status || (cell.isChecked ? 'success' : 'pending');
+                const votes = cell.userVotes || {};
+
+                Object.entries(votes).forEach(([voterId, vote]) => {
+                    if (!scores[voterId]) scores[voterId] = 0;
+
+                    // Point if Success and voted 'success'
+                    if (status === 'success' && vote === 'success') {
+                        scores[voterId] += 1;
+                    }
+                    // Point if Failed and voted 'fail'
+                    else if (status === 'failed' && vote === 'fail') {
+                        scores[voterId] += 1;
+                    }
+                });
+            });
+        });
+
+        // Convert to array and sort
+        return Object.entries(scores)
+            .map(([uid, score]) => ({ id: uid, score }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5); // Top 5
+    };
+
+    const topBettors = calculateBettorScores(grids);
 
 
 
@@ -98,31 +147,68 @@ const Dashboard = () => {
     return (
         <div className="space-y-12">
             {/* LEADERBOARD SECTION */}
+            {/* LEADERBOARDS SECTION */}
             {grids.length > 0 && (
-                <div className="bg-white/90 rounded-xl p-6 shadow-2xl border-4 border-yellow-400 max-w-2xl mx-auto">
-                    <h3 className="text-2xl font-black text-center mb-6 uppercase tracking-widest text-yellow-600 flex items-center justify-center gap-2">
-                        🏆 Classement Général 🏆
-                    </h3>
-                    <div className="space-y-2">
-                        {rankedGrids.map((grid, index) => (
-                            <div
-                                key={grid.id}
-                                className={`flex items-center justify-between p-3 rounded-lg font-bold ${index === 0 ? 'bg-yellow-100 border-2 border-yellow-400 text-yellow-800 scale-105 shadow-md' :
-                                    index === 1 ? 'bg-gray-100 border-2 border-gray-400 text-gray-700' :
-                                        index === 2 ? 'bg-orange-100 border-2 border-orange-400 text-orange-800' :
-                                            'bg-white border border-gray-200 text-gray-600'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <span className="text-xl w-8 text-center font-black">#{index + 1}</span>
-                                    <span className="uppercase">{grid.name}</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+                    {/* PLAYER LEADERBOARD */}
+                    <div className="bg-white/90 rounded-xl p-6 shadow-2xl border-4 border-yellow-400">
+                        <h3 className="text-2xl font-black text-center mb-6 uppercase tracking-widest text-yellow-600 flex items-center justify-center gap-2">
+                            🏆 Classement Joueurs 🏆
+                        </h3>
+                        <div className="space-y-2">
+                            {rankedGrids.map((grid, index) => (
+                                <div
+                                    key={grid.id}
+                                    className={`flex items-center justify-between p-3 rounded-lg font-bold ${index === 0 ? 'bg-yellow-100 border-2 border-yellow-400 text-yellow-800 scale-105 shadow-md' :
+                                        index === 1 ? 'bg-gray-100 border-2 border-gray-400 text-gray-700' :
+                                            index === 2 ? 'bg-orange-100 border-2 border-orange-400 text-orange-800' :
+                                                'bg-white border border-gray-200 text-gray-600'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-xl w-8 text-center font-black">#{index + 1}</span>
+                                        <span className="uppercase">{grid.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-2xl">{grid.score}</span>
+                                        <span className="text-xs uppercase opacity-75 pt-1">Pts</span>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-2xl">{grid.score}</span>
-                                    <span className="text-xs uppercase opacity-75 pt-1">Pts</span>
-                                </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* BETTOR LEADERBOARD */}
+                    <div className="bg-white/90 rounded-xl p-6 shadow-2xl border-4 border-indigo-400">
+                        <h3 className="text-2xl font-black text-center mb-6 uppercase tracking-widest text-indigo-600 flex items-center justify-center gap-2">
+                            🔮 Meilleurs Parieurs 🔮
+                        </h3>
+                        <div className="space-y-2">
+                            {topBettors.length === 0 ? (
+                                <div className="text-center italic opacity-50 py-4">Pas encore de paris validés...</div>
+                            ) : (
+                                topBettors.map((bettor, index) => {
+                                    const userName = users[bettor.id] || `Anonyme (${bettor.id.substr(0, 4)}...)`;
+                                    return (
+                                        <div
+                                            key={bettor.id}
+                                            className={`flex items-center justify-between p-3 rounded-lg font-bold ${index === 0 ? 'bg-indigo-100 border-2 border-indigo-400 text-indigo-800 scale-105 shadow-md' :
+                                                'bg-white border border-gray-200 text-gray-600'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-xl w-8 text-center font-black">#{index + 1}</span>
+                                                <span className="uppercase font-mono text-sm truncate max-w-[8rem] sm:max-w-[12rem]">{userName}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-2xl">{bettor.score}</span>
+                                                <span className="text-xs uppercase opacity-75 pt-1">Pts</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -133,6 +219,7 @@ const Dashboard = () => {
                     <BingoBoard
                         key={grid.id}
                         grid={grid}
+                        currentUserId={userId} // Pass userId for determining own vote
                         onToggle={handleToggle}
                         onDelete={handleDelete}
                         onVote={handleVote}

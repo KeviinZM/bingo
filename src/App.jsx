@@ -1,6 +1,7 @@
 import CreateGrid from './components/CreateGrid';
 import Dashboard from './components/Dashboard';
 import Rules from './components/Rules';
+import NameModal from './components/NameModal';
 
 function App() {
     return (
@@ -25,6 +26,7 @@ function App() {
 
                 <div className="my-8"></div>
                 <Rules />
+                <NameModal />
             </div>
         </div>
     );

@@ -58,55 +58,70 @@ const BingoBoard = ({ grid, currentUserId, onToggle, onDelete, onVote }) => {
                 <span className="text-yellow-400">SCORE: {score}</span>
             </div>
             <div className="grid grid-cols-3 gap-1 bg-gray-200 p-1">
-                {cells.map((cell, idx) => (
-                    <div key={idx} className="flex flex-col h-full bg-white gap-1">
-                        {/* Main Interaction Button */}
-                        <button
-                            onClick={() => onToggle(id, idx, cell.isChecked)}
-                            className={`
-                                flex-1 w-full flex flex-col items-center justify-center p-1 text-xs font-bold text-center break-words select-none transition-all relative min-h-[5rem]
-                                ${cell.isChecked
-                                    ? 'bg-green-500 text-white'
-                                    : 'bg-white text-gray-800 hover:bg-gray-50'}
-                            `}
-                        >
-                            {cell.priority && (
-                                <span className={`absolute top-1 right-1 text-[9px] px-1 rounded-full ${cell.isChecked ? 'bg-white text-green-600' : 'bg-yellow-400 text-black'}`}>
-                                    ★{cell.priority}
-                                </span>
-                            )}
-                            <span>{cell.text}</span>
-                        </button>
+                {cells.map((cell, idx) => {
+                    const status = cell.status || (cell.isChecked ? 'success' : 'pending');
+                    const isSuccess = status === 'success';
+                    const isFailed = status === 'failed';
+                    const userVote = cell.userVotes?.[currentUserId];
 
-                        {/* Voting/Odds Section */}
-                        <div className="grid grid-cols-3 text-[9px] border-t border-gray-100">
+                    // Determine cell background color
+                    let cellBg = 'bg-white text-gray-800';
+                    if (isSuccess) cellBg = 'bg-green-500 text-white';
+                    if (isFailed) cellBg = 'bg-red-500 text-white';
+
+                    return (
+                        <div key={idx} className="flex flex-col h-full bg-white gap-1 relative">
+                            {/* Main Interaction Button */}
                             <button
-                                onClick={() => onVote(id, idx, 'success')}
-                                className="bg-green-50 hover:bg-green-100 text-green-700 p-1 flex flex-col items-center border-r border-gray-100"
-                                title="Il va réussir"
+                                onClick={() => onToggle(id, idx, cell.isChecked)}
+                                className={`
+                                    flex-1 w-full flex flex-col items-center justify-center p-1 text-xs font-bold text-center break-words select-none transition-all relative min-h-[5rem]
+                                    ${cellBg} hover:opacity-90
+                                `}
                             >
-                                <span>✅</span>
-                                <span className="font-mono font-bold">{calculateOdds(cell.votes, 'success')}</span>
+                                {cell.priority && (
+                                    <span className={`absolute top-1 right-1 text-[9px] px-1 rounded-full ${isSuccess || isFailed ? 'bg-white text-black' : 'bg-yellow-400 text-black'}`}>
+                                        ★{cell.priority}
+                                    </span>
+                                )}
+                                <span>{cell.text}</span>
+                                {isFailed && <span className="absolute bottom-1 font-black text-xs uppercase text-red-100">RATÉ</span>}
                             </button>
-                            <button
-                                onClick={() => onVote(id, idx, 'fail')}
-                                className="bg-red-50 hover:bg-red-100 text-red-700 p-1 flex flex-col items-center border-r border-gray-100"
-                                title="Il va échouer"
-                            >
-                                <span>❌</span>
-                                <span className="font-mono font-bold">{calculateOdds(cell.votes, 'fail')}</span>
-                            </button>
-                            <button
-                                onClick={() => onVote(id, idx, 'unsure')}
-                                className="bg-gray-50 hover:bg-gray-100 text-gray-600 p-1 flex flex-col items-center"
-                                title="Ne sais pas"
-                            >
-                                <span>🤔</span>
-                                <span className="font-mono font-bold">{calculateOdds(cell.votes, 'unsure')}</span>
-                            </button>
+
+                            {/* Voting/Odds Section */}
+                            <div className="grid grid-cols-3 text-[9px] border-t border-gray-100">
+                                {['success', 'fail', 'unsure'].map(type => {
+                                    // Calculate count from userVotes map
+                                    const voteCount = Object.values(cell.userVotes || {}).filter(v => v === type).length;
+                                    const icons = { success: '✅', fail: '❌', unsure: '🤔' };
+                                    const titles = { success: 'Il va réussir', fail: 'Il va échouer', unsure: 'Ne sais pas' };
+                                    const colors = {
+                                        success: userVote === 'success' ? 'bg-green-200 text-green-800 border-green-500' : 'bg-green-50 text-green-700 hover:bg-green-100',
+                                        fail: userVote === 'fail' ? 'bg-red-200 text-red-800 border-red-500' : 'bg-red-50 text-red-700 hover:bg-red-100',
+                                        unsure: userVote === 'unsure' ? 'bg-gray-200 text-gray-800 border-gray-500' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                                    };
+
+                                    return (
+                                        <button
+                                            key={type}
+                                            onClick={() => status === 'pending' && onVote(id, idx, type)}
+                                            disabled={status !== 'pending'}
+                                            className={`
+                                                p-1 flex flex-col items-center border-r border-gray-100 transition-colors
+                                                ${colors[type]} ${userVote === type ? 'font-bold border-b-2' : ''}
+                                                ${status !== 'pending' ? 'opacity-50 cursor-not-allowed' : ''}
+                                            `}
+                                            title={titles[type]}
+                                        >
+                                            <span>{icons[type]}</span>
+                                            <span className="font-mono font-bold">{voteCount}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
             {score > 0 && (
                 <div className="bg-yellow-400 text-black text-center font-bold text-xs py-1 animate-pulse">

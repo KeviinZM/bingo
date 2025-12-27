@@ -41,8 +41,8 @@ const CreateGrid = () => {
             const cells = inputs.map(input => ({
                 text: input.text,
                 priority: parseInt(input.priority),
-                isChecked: false,
-                votes: { success: 1, fail: 1, unsure: 1 } // Init with 1 to avoid div/0
+                status: 'pending', // Replaces isChecked. Values: pending, success, failed
+                userVotes: {} // Map userId -> 'success' | 'fail' | 'unsure'
             }));
             await addDoc(collection(db, 'bingo_grids'), {
                 name,

@@ -15,7 +15,10 @@ export const checkWin = (gridCells) => {
 
     // 1. Calculate points from checked cells (weighted by priority)
     gridCells.forEach(cell => {
-        if (cell.isChecked) {
+        // Support both new 'status' and legacy 'isChecked'
+        const isSuccess = cell.status === 'success' || (cell.status === undefined && cell.isChecked);
+
+        if (isSuccess) {
             // Priority 1 (Most important) = 9 points
             // Priority 9 (Least important) = 1 point
             // Formula: 10 - Priority
@@ -28,7 +31,10 @@ export const checkWin = (gridCells) => {
 
     // 2. Add bonus points for completed lines (1 point per line)
     for (const combination of winningCombinations) {
-        if (combination.every(index => gridCells[index]?.isChecked)) {
+        if (combination.every(index => {
+            const c = gridCells[index];
+            return c && (c.status === 'success' || (c.status === undefined && c.isChecked));
+        })) {
             score += 1; // Bonus for completing a line
         }
     }

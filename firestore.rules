@@ -1,13 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Grilles de Bingo
     match /bingo_grids/{document=**} {
-      // 🟢 Publique : Tout le monde peut lire les grilles
-      allow read: if true;
-      
-      // 🟢 Publique : Tout le monde peut créer, modifier (voter/cocher) et supprimer
-      // (Nécessaire car tu as voulu permettre la suppression par tous)
-      allow write: if true;
+      allow read, write: if true;
+    }
+    // Profils utilisateurs (Pseudo)
+    match /bingo_users/{document=**} {
+      allow read, write: if true;
     }
   }
 }
